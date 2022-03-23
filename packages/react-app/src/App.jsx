@@ -31,6 +31,7 @@ import {
   Header,
   Ramp,
   ThemeSwitch,
+  TokenBalance,
 } from "./components";
 import { INFURA_ID, NETWORK, NETWORKS } from "./constants";
 import { Transactor } from "./helpers";
@@ -60,8 +61,10 @@ const { ethers } = require("ethers");
 */
 
 /// 📡 What chain are your contracts deployed to?
-const targetNetwork = NETWORKS.localhost; // <------- select your target frontend network (localhost, rinkeby, xdai, mainnet)
+const targetNetwork = NETWORKS.ropsten; // <------- select your target frontend network (localhost, rinkeby, xdai, mainnet)
 
+//// developer Address
+const devAddress = "0xCA7632327567796e51920F6b16373e92c7823854";
 // 😬 Sorry for all the console logging
 const DEBUG = true;
 const NETWORKCHECK = true;
@@ -484,7 +487,21 @@ function App(props) {
   }
 
   const buyTokensEvents = useEventListener(readContracts, "Vendor", "BuyTokens", localProvider, 1);
+  const sellTokensEvents = useEventListener(readContracts, "Vendor", "SellTokens", localProvider, 1);
   console.log("📟 buyTokensEvents:", buyTokensEvents);
+  console.log("📟 sellTokensEvents:", sellTokensEvents);
+
+  
+  // check Sell Amount validity
+  // const [checkSellAmount, setCheckSellAmount] = useState();
+  // console.log("Check sell amount says: ", checkSellAmount);
+  // const renderSellAmountChecker = () => {
+  //   if (!checkSellAmount) {
+  //     return <span style={{ color: "red" }}>Insufficient tokens in balance</span>;
+  //   } else {
+  //     return "";
+  //   }
+  // } 
 
   const [tokenBuyAmount, setTokenBuyAmount] = useState({
     valid: false,
@@ -516,6 +533,7 @@ function App(props) {
   const [tokenSendAmount, setTokenSendAmount] = useState();
 
   const [buying, setBuying] = useState();
+  const [withdraw, setWithdraw] = useState();
 
   let transferDisplay = "";
   if (yourTokenBalance) {
@@ -635,10 +653,41 @@ function App(props) {
                 </div>
               </Card>
             </div>
-          
+
+          {/* UI FOR WITHDRAWING ETH FROM VENDOR */}
+            <Divider />
+            <div style={{ padding: 8, marginTop: 32, width: 300, margin: "auto" }}>
+              <Card title="Withdraw Tokens">
+                <div style={{ padding: 8 }}> ETH Balance</div>
+                <Balance balance={vendorETHBalance} fontSize={64} /> ETH
+
+                {/* <Balance balance={ethValueToSellTokens} dollarMultiplier={price} /> */}
+
+                {/* <div style={{ padding: 8 }}>
+                  <Input
+                    style={{ textAlign: "center" }}
+                    placeholder={"amount of ETH to withdraw"}
+                    onChange={1}
+                  />
+                </div> */}
+                <div style={{ padding: 8 }}>
+                  <Button
+                    disabled={false}
+                    loading={withdraw}
+                    type={"primary"}
+                    onClick={async () => {
+                      setWithdraw(true);
+                      await tx(writeContracts.Vendor.withdraw());
+                      setWithdraw(false);
+                    }}
+                  >
+                    Withdraw ETH
+                  </Button>
+                </div>
+              </Card>
+            </div>
             
-            
-            {/*Extra UI for buying the tokens back from the user using "approve" and "sellTokens"
+            {/* Extra UI for buying the tokens back from the user using "approve" and "sellTokens" */}
 
             <Divider />
             <div style={{ padding: 8, marginTop: 32, width: 300, margin: "auto" }}>
@@ -657,10 +706,21 @@ function App(props) {
                         valid: /^\d*\.?\d+$/.test(newValue)
                       }
                       setTokenSellAmount(sellAmount);
+                      if (yourTokenBalance < sellAmount.value) {
+                        setCheckSellAmount(false);
+                      } else {
+                        setCheckSellAmount(true);
+                      }
+                        
                     }}
                   />
+                  {/* Form validation feedback ui */}
+                  {/* <div>
+                    {renderSellAmountChecker()}
+                  </div> */}
                   <Balance balance={ethValueToSellTokens} dollarMultiplier={price} />
                 </div>
+                  
                 {isSellAmountApproved?
 
                   <div style={{ padding: 8 }}>
@@ -671,6 +731,7 @@ function App(props) {
                       Approve Tokens
                     </Button>
                     <Button
+                      style={{ marginTop: 8 }}
                       type={"primary"}
                       loading={buying}
                       onClick={async () => {
@@ -704,18 +765,19 @@ function App(props) {
                       Approve Tokens
                     </Button>
                     <Button
+                      style={{ marginTop: 8 }}
                       disabled={true}
                       type={"primary"}
                     >
                       Sell Tokens
                     </Button>
                   </div>
-                    }
+                }
 
 
               </Card>
             </div>
-            */}
+           
             <div style={{ padding: 8, marginTop: 32 }}>
               <div>Vendor Token Balance:</div>
               <Balance balance={vendorTokenBalance} fontSize={64} />
@@ -727,21 +789,42 @@ function App(props) {
             </div>
 
             <div style={{ width: 500, margin: "auto", marginTop: 64 }}>
-              <div>Buy Token Events:</div>
-              <List
-                dataSource={buyTokensEvents}
-                renderItem={item => {
-                  return (
-                    <List.Item key={item.blockNumber + item.blockHash}>
-                      <Address value={item.args[0]} ensProvider={mainnetProvider} fontSize={16} /> paid
-                      <Balance balance={item.args[1]} />
-                      ETH to get
-                      <Balance balance={item.args[2]} />
-                      Tokens
-                    </List.Item>
-                  );
-                }}
-              />
+              {/* buy token events */}
+              <div>
+                <div style={{ color: "green", fontWeight: 600 }}>Buy Token Events:</div>
+                <List
+                  dataSource={buyTokensEvents}
+                  renderItem={item => {
+                    return (
+                      <List.Item key={item.blockNumber + item.blockHash}>
+                        <Address value={item.args[0]} ensProvider={mainnetProvider} fontSize={16} /> paid
+                        <Balance balance={item.args[1]} />
+                        ETH to get
+                        <Balance balance={item.args[2]} />
+                        Tokens
+                      </List.Item>
+                    );
+                  }}
+                />
+              </div>
+              {/* sell token events */}
+              <div>
+                <div style={{ color: "red", fontWeight: 600 }}>Sell Token Events:</div>
+                <List
+                  dataSource={sellTokensEvents}
+                  renderItem={item => {
+                    return (
+                      <List.Item key={item.blockNumber + item.blockHash}>
+                        <Address value={item.args[0]} ensProvider={mainnetProvider} fontSize={16} /> paid
+                        <Balance balance={item.args[2]} />
+                        Tokens
+                        <Balance balance={item.args[1]} />
+                        to get ETH
+                      </List.Item>
+                    );
+                  }}
+                />
+              </div>
             </div>
 
             {/*
@@ -800,7 +883,7 @@ function App(props) {
       </div>
 
       <div style={{ marginTop: 32, opacity: 0.5 }}>
-        Created by <Address value={"Your...address"} ensProvider={mainnetProvider} fontSize={16} />
+        Created by <Address value={devAddress} ensProvider={mainnetProvider} fontSize={16} />
       </div>
 
       <div style={{ marginTop: 32, paddingBottom: 128, opacity: 0.5 }}>

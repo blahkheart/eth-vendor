@@ -12,8 +12,14 @@ const hre = require("hardhat");
 const { ethers } = hre;
 const { use, expect } = require("chai");
 const { solidity } = require("ethereum-waffle");
+let contractOwner, secondAccount;
 
 use(solidity);
+
+beforeEach(async () => {
+  // eslint-disable-next-line no-unused-vars
+  [ contractOwner, secondAccount ] = await ethers.getSigners();
+});
 
 describe("🚩 Challenge 2: 🏵 Token Vendor 🤖", function () {
 
@@ -96,10 +102,55 @@ describe("🚩 Challenge 2: 🏵 Token Vendor 🤖", function () {
     });
   })
 
+  describe('withdraw() ETH', () => {
+    it('withdraw reverted because called by not the owner', async () => {
+      await expect(vendor.connect(secondAccount).withdraw()).to.be.revertedWith('Ownable: caller is not the owner');
+      // console.log('withdraw should revert because of insufficient balance to withdraw');
+      // const ownerETHBalance = await ethers.provider.getBalance(owner.address);
+      // const vendorEthBalance = await ethers.provider.getBalance(vendor.address);
+      // console.log('Owner ETH balance: ', ethers.utils.formatEther(ownerETHBalance));
+      // console.log('vendor ETH balance: ', ethers.utils.formatEther(vendorEthBalance));
+      // await expect(vendor.connect(owner).withdraw()).to.be.revertedWith('Owner has not balance to withdraw');
+    });
+
+   
+
+    it('withdraw success', async () => {
+      const ethOfTokenToBuy = ethers.utils.parseEther('1');
+
+      // buyTokens operation
+      await vendor.connect(secondAccount).buyTokens({
+        value: ethOfTokenToBuy,
+      });
+      const vendorEthBalanceBeforeWithdraw = await ethers.provider.getBalance(vendor.address);
+      
+      // withdraw operation
+      const txWithdraw = await vendor.connect(contractOwner).withdraw();
+
+      // Check that the Vendor's balance has 0 ETH
+      const vendorCurrentEthBalance = await ethers.provider.getBalance(vendor.address);
+      expect(vendorCurrentEthBalance).to.equal(0);
+      
+      // Check the the owner balance has changed by vendor's ETH balance
+      await expect(txWithdraw).to.changeEtherBalance(contractOwner, vendorEthBalanceBeforeWithdraw);
+    });
+
+    it('withdraw reverted because vendor has insufficient balance', async () => {
+      const vendorEthBalance = await ethers.provider.getBalance(vendor.address);
+      console.log('vendor ETH balance1: ', ethers.utils.formatEther(vendorEthBalance));
+      await expect(vendor.connect(contractOwner).withdraw()).to.be.revertedWith('Vendor has no balance to withdraw');
+    });
+  });
 
   describe("💵 sellTokens()", function () {
     it("Should let us sell tokens and we should get eth back...", async function () {
-      const [ owner ] = await ethers.getSigners();
+      const [owner] = await ethers.getSigners();
+      
+      // buy tokens to ensure vendor has ETH balance to accept sale
+      // await vendor.connect(owner).buyTokens(ethers.utils.parseEther("10"));
+      await vendor.connect(secondAccount).buyTokens({
+        value: ethers.utils.parseEther('1'),
+      });
 
       const startingETHBalance = await ethers.provider.getBalance(owner.address)
       console.log('\t'," ⚖️ Starting ETH balance: ",ethers.utils.formatEther(startingETHBalance))
@@ -114,9 +165,10 @@ describe("🚩 Challenge 2: 🏵 Token Vendor 🤖", function () {
       console.log('\t'," ⏳ Waiting for confirmation...")
       const atxResult =  await approveTokensResult.wait()
       expect(atxResult.status).to.equal(1);
-
-      console.log('\t'," 🍾 Selling...")
-      const sellTokensResult = await vendor.sellTokens(ethers.utils.parseEther("0.1"));
+      
+      console.log('\t', " 🍾 Selling...")
+      const tokenAmountToSell = ethers.utils.parseEther("0.1");
+      const sellTokensResult = await vendor.sellTokens(tokenAmountToSell);
       console.log('\t'," 🏷  sellTokens Result: ",sellTokensResult.hash)
 
       console.log('\t'," ⏳ Waiting for confirmation...")
@@ -125,12 +177,15 @@ describe("🚩 Challenge 2: 🏵 Token Vendor 🤖", function () {
 
       const newBalance = await yourToken.balanceOf(owner.address)
       console.log('\t'," 🔎 New balance: ", ethers.utils.formatEther(newBalance))
-      expect(newBalance).to.equal(startingBalance.sub(ethers.utils.parseEther("0.1")));
+      expect(newBalance).to.equal(startingBalance.sub(tokenAmountToSell));
 
       const newETHBalance = await ethers.provider.getBalance(owner.address)
       console.log('\t'," 🔎 New ETH balance: ", ethers.utils.formatEther(newETHBalance))
       const ethChange = newETHBalance.sub(startingETHBalance).toNumber()
       expect(ethChange).to.greaterThan(100000000000000);
+      
+      // expect(sellTokensResult).to.changeEtherBalance(owner, tokenAmountToSell);
+      // expect(sellTokensResult).to.changeEtherBalance(owner, ethers.utils.parseEther("0.1"));
 
     });
   })
